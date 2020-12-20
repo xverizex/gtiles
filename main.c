@@ -23,19 +23,19 @@ struct widgets {
 } w;
 
 struct image {
-	int width;
-	int height;
-	int x;
-	int y;
+	double width;
+	double height;
+	double x;
+	double y;
 	unsigned char *bytes;
 	int pos;
 };
 
 struct info_tile {
-	int x;
-	int y;
-	int width;
-	int height;
+	double x;
+	double y;
+	double width;
+	double height;
 };
 
 struct scene {
@@ -47,6 +47,15 @@ struct scene {
 };
 
 #define SCENE_LAYER           10
+
+struct level {
+	int width;
+	int height;
+	int tile_width;
+	int tile_height;
+	char filename[255];
+};
+
 
 struct list_files {
 	int id;
@@ -69,10 +78,11 @@ struct list_files {
 	GtkWidget *box_layer;
 	double pos_x;
 	double pos_y;
+	int grid;
 	double offset_x;
 	double offset_y;
-	int size_width;
-	int size_height;
+	double size_width;
+	double size_height;
 	char *pic_path;
 	int size_pics;
 	struct image **im;
@@ -126,12 +136,12 @@ static gboolean draw_pics_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 	cairo_set_source_rgb ( cr, 0.2, 0.2, 0.2 );
 	cairo_paint ( cr );
 
-	int width, height;
+	double width, height;
 	width = gtk_widget_get_allocated_width ( widget );
 	height = gtk_widget_get_allocated_height ( widget );
 
-	int x = 0;
-	int y = 0;
+	double x = 0;
+	double y = 0;
 	for ( int i = 0; i < lm->size_pics; i++ ) {
 		if ( x + lm->size_width >= width ) {
 			y += lm->size_height;
@@ -155,23 +165,25 @@ static gboolean draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer data ) {
 	cairo_set_source_rgb ( cr, 0.2, 0.2, 0.2 );
 	cairo_paint ( cr );
 
-	int width, height;
+	double width, height;
 	width = gtk_widget_get_allocated_width ( widget );
 	height = gtk_widget_get_allocated_height ( widget );
 
 	cairo_set_source_rgb ( cr, 1.0, 1.0, 1.0 );
 
-	int x, y;
+	double x, y;
 
-	for ( x = l->pos_x, y = l->pos_y; y < height; y += l->size_height ) {
-		cairo_move_to ( cr, x, y );
-		cairo_line_to ( cr, width, y );
+	if ( l->grid ) {
+		for ( x = l->pos_x, y = l->pos_y; y < height; y += l->size_height ) {
+			cairo_move_to ( cr, x, y );
+			cairo_line_to ( cr, width, y );
+		}
+		for ( x = l->pos_x, y = l->pos_y; x < width; x += l->size_width ) {
+			cairo_move_to ( cr, x, y );
+			cairo_line_to ( cr, x, height );
+		}
+		cairo_stroke ( cr );
 	}
-	for ( x = l->pos_x, y = l->pos_y; x < width; x += l->size_width ) {
-		cairo_move_to ( cr, x, y );
-		cairo_line_to ( cr, x, height );
-	}
-	cairo_stroke ( cr );
 
 	if ( l->current_pic >= 0 ) {
 		cairo_set_source_surface ( cr, l->sur[l->current_pic], l->info[l->current_pic].x, l->info[l->current_pic].y );
@@ -203,59 +215,64 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 	struct list_files *l = ( struct list_files * ) data;
 
 	if ( btn_m ) {
-		int x = evm->x;
-		int y = evm->y;
+		double x = evm->x;
+		double y = evm->y;
+		double temp_x = 0.0;
+		double temp_y = 0.0;
 
 		if ( l->pos_x > 0 ) {
 			l->pos_x -= x - px + l->size_width;
 		} else {
-			if ( l->pos_x < -l->size_width ) l->pos_x += l->size_width;
+			double size = -l->size_width;
+			if ( l->pos_x <= -l->size_width ) {
+				l->pos_x += l->size_width;
+				temp_x = x - px;
+			}
 			else l->pos_x -= x - px;
 		}
 		if ( l->pos_y > 0 ) {
 			l->pos_y -= y - py + l->size_height;
 		} else {
-			if ( l->pos_y < -l->size_height ) l->pos_y += l->size_height;
+			if ( l->pos_y < -l->size_height ) {
+				l->pos_y += l->size_height;
+				temp_y = y - py;
+			}
 			else l->pos_y -= y - py;
 		}
-
 
 		for ( int i = 0; i < SCENE_LAYER; i++ ) {
 			struct scene *sc = &lm->scene[i];
 
 			while ( sc->available ) {
-				double rx = evm->x - px;
-				double ry = evm->y - py;
-				printf ( "%f %f %f %f\n", evm->x, px, rx, fabs ( rx ) );
-				double rrx = fabs ( rx );
-				double rry = fabs ( ry );
 
-#if 0
-				if ( rx > 0.0 ) sc->x -= rrx + l->pos_x;
-				else if ( rx < 0.0 ) sc->x += rrx - l->pos_x;
+				double xx = x - px;
+				double yy = y - py;
 
-				if ( ry > 0.0 ) sc->y -= rry;
-				else if ( ry < 0.0 ) sc->y += rry;
-#endif
+				if ( xx < 0.0 ) sc->x += fabs ( xx );
+				else if ( xx > 0.0 ) sc->x -= fabs ( xx ) - temp_x;
+
+				if ( yy < 0.0 ) sc->y += fabs ( yy );
+				else if ( yy > 0.0 ) sc->y -= fabs ( yy ) - temp_y;
 
 				if ( !sc->next ) break;
 
 				sc = sc->next;
 			}
 		}
+
+
 		px = x;
 		py = y;
 
-		gtk_widget_queue_draw ( l->drawing );
 	}
 
 	if ( lm->current_pic >= 0 ) {
-		int width, height;
+		double width, height;
 		width = gtk_widget_get_allocated_width ( widget );
 		height = gtk_widget_get_allocated_height ( widget );
 		int found = 0;
-		for ( int y = l->pos_y; y < height; y += l->size_height ) {
-			for ( int x = l->pos_x; x < width; x += l->size_width ) {
+		for ( double y = l->pos_y; y < height; y += l->size_height ) {
+			for ( double x = l->pos_x; x < width; x += l->size_width ) {
 				if ( evm->x >= x && evm->x <= x + l->size_width ) {
 					if ( evm->y >= y && evm->y <= y + l->size_height ) {
 						lm->info[l->current_pic].x = x;
@@ -268,10 +285,9 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 			if ( found ) break;
 		}
 
-		gtk_widget_queue_draw ( l->drawing );
 	}
 
-	
+	gtk_widget_queue_draw ( l->drawing );
 
 	return FALSE;
 }
@@ -291,8 +307,8 @@ static gboolean draw_button_press_event_cb ( GtkWidget *widget, GdkEvent *event,
 		paint_bool = 1;
 		int layer = gtk_spin_button_get_value ( ( GtkSpinButton * ) lm->spin_layer );
 		struct scene *sc = &lm->scene[layer];
-		int x = lm->info[lm->current_pic].x;
-		int y = lm->info[lm->current_pic].y;
+		double x = lm->info[lm->current_pic].x;
+		double y = lm->info[lm->current_pic].y;
 		int found = 0;
 		while ( sc->available ) {
 			if ( sc->x == x && sc->y == y ) {
@@ -385,6 +401,13 @@ static void activate_new_project ( GSimpleAction *simple, GVariant *parameter, g
 
 	if ( !l->filename ) return;
 
+	struct level level;
+	level.width = 0;
+	level.height = 0;
+	FILE *fp = fopen ( l->filename, "w" );
+	fwrite ( &level, 1, sizeof ( struct level ), fp );
+	fclose ( fp );
+
 	l->name = strrchr ( l->filename, '/' );
 	l->name++;
 
@@ -432,7 +455,7 @@ static void activate_new_project ( GSimpleAction *simple, GVariant *parameter, g
 	gtk_widget_set_margin_start ( label_layer, 16 );
 	gtk_widget_set_margin_end ( label_layer, 16 );
 
-	GtkWidget *spin_layer = gtk_spin_button_new_with_range ( 0, 100, 1 );
+	GtkWidget *spin_layer = gtk_spin_button_new_with_range ( 0, 9, 1 );
 	l->spin_layer = spin_layer;
 	gtk_widget_set_margin_top ( spin_layer, 16 );
 	gtk_widget_set_margin_start ( spin_layer, 16 );
@@ -474,7 +497,86 @@ static void activate_new_project ( GSimpleAction *simple, GVariant *parameter, g
 	l->next = calloc ( 1, sizeof ( struct list_files ) );
 
 }
+static void write_to_file ( struct scene *sc, int sx, int sy, int width, int height ) {
+	int map[height][width];
+	for ( int y = 0; y < height; y++ ) {
+		for ( int x = 0; x < width; x++ ) {
+			map[y][x] = -1;
+		}
+	}
+
+	while ( sc->available ) {
+		//printf ( "%f %d %d\n", sc->x, sx, eex );
+		int x = sc->x - ( sx < 0 ? sx - 1 : sx );
+		int y = sc->y - ( sy < 0 ? sy - 1 : sy );
+		x /= lm->size_width;
+		y /= lm->size_height;
+
+		map[y][x] = sc->pic;
+
+		if ( !sc->next ) break;
+
+		sc = sc->next;
+	}
+
+	FILE *fp = fopen ( lm->filename, "a+" );
+	fwrite ( map, 1, sizeof ( map ), fp );
+	fclose ( fp );
+}
 static void activate_save_project ( GSimpleAction *simple, GVariant *parameter, gpointer data ) {
+	struct level level;
+	int sx, sy, ex, ey;
+	int ff = 0;
+	int temp_x, temp_y;
+	for ( int i = 0; i < SCENE_LAYER; i++ ) {
+		struct scene *sc = &lm->scene[i];
+		while ( sc->available ) {
+
+			temp_x = sc->x;
+			temp_y = sc->y;
+			if ( !ff ) {
+				sx = ex = temp_x;
+				sy = ey = temp_y;
+				ff = 1;
+			} else {
+				if ( temp_x < sx ) sx = temp_x;
+				if ( temp_y < sy ) sy = temp_y;
+				if ( temp_x > ex ) ex = temp_x;
+				if ( temp_y > ey ) ey = temp_y;
+			}
+
+			if ( !sc->next ) break;
+
+			sc = sc->next;
+		}
+	}
+
+	int eex = ex;
+	int eey = ey;
+	ex -= sx < 0 ? sx - 1 : sx;
+	ey -= sy < 0 ? sy - 1 : sy;
+	int xx = sx;
+	int yy = sy;
+	ex /= lm->size_width;
+	ey /= lm->size_height;
+
+	ex++;
+	ey++;
+
+	level.width = ex;
+	level.height = ey;
+	level.tile_width = lm->size_width;
+	level.tile_height = lm->size_height;
+	strncpy ( level.filename, lm->pic_path, 255 );
+
+	FILE *fp = fopen ( lm->filename, "w" );
+	fwrite ( &level, 1, sizeof ( struct level ), fp );
+	fclose ( fp );
+
+	for ( int i = 0; i < SCENE_LAYER; i++ ) {
+		struct scene *sc = &lm->scene[i];
+		write_to_file ( sc, sx, sy, level.width, level.height );
+	}
 }
 static void activate_save_as_project ( GSimpleAction *simple, GVariant *parameter, gpointer data ) {
 }
@@ -486,13 +588,146 @@ static void activate_add_picture ( GSimpleAction *simple, GVariant *parameter, g
 	gtk_widget_show_all ( w.window_ap );
 }
 
-static void button_add_ap_cb ( GtkButton *button, gpointer data ) {
+static void read_pic ( char *pic_path, int state_file );
+
+static void activate_open_project ( GSimpleAction *simple, GVariant *parameter, gpointer data ) {
+	struct list_files *l = lf;
+	while ( l->next ) l = l->next;
+	l->current_pic = -1;
+
+	l->filename = get_dialog_file_name ( "Открыть проект", "Открыть", GTK_FILE_CHOOSER_ACTION_OPEN );
+
+	if ( !l->filename ) return;
+
+	l->name = strrchr ( l->filename, '/' );
+	l->name++;
+
+	l->frame = g_object_new ( GTK_TYPE_FRAME, "shadow-type", GTK_SHADOW_NONE, NULL );
+	GtkWidget *box = gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
+	GtkWidget *drawing = gtk_drawing_area_new ( );
+	l->drawing = drawing;
+	l->size_width = l->size_height = 64;
+	g_signal_connect ( drawing, "draw", G_CALLBACK ( draw_cb ), l );
+	g_signal_connect ( drawing, "button-press-event", G_CALLBACK ( draw_button_press_event_cb ), l );
+	g_signal_connect ( drawing, "button-release-event", G_CALLBACK ( draw_button_release_event_cb ), l );
+	g_signal_connect ( drawing, "motion-notify-event", G_CALLBACK ( draw_button_motion_event_cb ), l );
+	gtk_widget_add_events ( drawing, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_BUTTON2_MOTION_MASK | GDK_POINTER_MOTION_MASK );
+	GtkWidget *paned = gtk_paned_new ( GTK_ORIENTATION_HORIZONTAL );
+	l->paned = paned;
+
+	GtkWidget *frame = g_object_new ( GTK_TYPE_FRAME, "shadow-type", GTK_SHADOW_NONE, NULL );
+	l->framen = frame;
+	gtk_widget_set_size_request ( drawing, 1080, -1 );
+	gtk_widget_set_size_request ( frame, 196, -1 );
+
+	gtk_paned_pack1 ( ( GtkPaned * ) paned, drawing, FALSE, FALSE );
+	gtk_paned_pack2 ( ( GtkPaned * ) paned, frame, FALSE, FALSE );
+
+	gtk_box_pack_start ( ( GtkBox * ) box, paned, TRUE, TRUE, 0 );
+
+	gtk_container_add ( ( GtkContainer * ) l->frame, box );
+
+	GtkWidget *label = gtk_label_new ( l->name );
+	l->label_name = label;
+	GtkWidget *button = gtk_button_new_from_icon_name ( "exit" , GTK_ICON_SIZE_MENU );
+	l->button_close = button;
+	GtkWidget *box_label = gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
+	l->box_label = box_label;
+	gtk_box_pack_start ( ( GtkBox * ) box_label, label, FALSE, FALSE, 0 );
+	gtk_box_pack_end ( ( GtkBox * ) box_label, button, FALSE, FALSE, 0 );
+
+	GtkWidget *box_frame = gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
+	l->box_frame = box_frame;
+	gtk_container_add ( ( GtkContainer * ) frame, box_frame );
+
+	GtkWidget *label_layer = gtk_label_new ( "Слой" );
+	l->label_layer = label_layer;
+	gtk_widget_set_margin_top ( label_layer, 16 );
+	gtk_widget_set_margin_start ( label_layer, 16 );
+	gtk_widget_set_margin_end ( label_layer, 16 );
+
+	GtkWidget *spin_layer = gtk_spin_button_new_with_range ( 0, 9, 1 );
+	l->spin_layer = spin_layer;
+	gtk_widget_set_margin_top ( spin_layer, 16 );
+	gtk_widget_set_margin_start ( spin_layer, 16 );
+	gtk_widget_set_margin_end ( spin_layer, 16 );
+
+	GtkWidget *box_layer = gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
+	l->box_layer = box_layer;
+	gtk_box_pack_start ( ( GtkBox * ) box_layer, label_layer, FALSE, FALSE, 0 );
+	gtk_box_pack_end ( ( GtkBox * ) box_layer, spin_layer, FALSE, FALSE, 0 );
+
+	l->frame_pics = g_object_new ( GTK_TYPE_FRAME, "shadow-type", GTK_SHADOW_NONE, NULL );
+	l->draw_pics = gtk_drawing_area_new ( );
+	g_signal_connect ( l->draw_pics, "draw", G_CALLBACK ( draw_pics_draw_cb ), l );
+	g_signal_connect ( l->draw_pics, "button-press-event", G_CALLBACK ( draw_pics_button_press_event_cb ), l );
+	g_signal_connect ( l->draw_pics, "button-release-event", G_CALLBACK ( draw_pics_button_release_event_cb ), l );
+	gtk_widget_add_events ( l->draw_pics, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK );
+	l->scroll_frame_pics = gtk_scrolled_window_new ( NULL, NULL );
+	gtk_container_add ( ( GtkContainer * ) l->scroll_frame_pics, l->draw_pics );
+	gtk_container_add ( ( GtkContainer * ) l->frame_pics, l->scroll_frame_pics );
+	gtk_widget_set_margin_top ( l->frame_pics, 16 );
+	gtk_widget_set_margin_start ( l->frame_pics, 16 );
+	gtk_widget_set_margin_end ( l->frame_pics, 16 );
+	gtk_widget_set_margin_bottom ( l->frame_pics, 16 );
+
+	gtk_box_pack_start ( ( GtkBox * ) box_frame, box_layer, FALSE, FALSE, 0 );
+	gtk_box_pack_start ( ( GtkBox * ) box_frame, l->frame_pics, TRUE, TRUE, 0 );
+
+	gtk_notebook_append_page ( ( GtkNotebook * ) w.notebook, l->frame, box_label );
+	l->id = gtk_notebook_page_num ( ( GtkNotebook * ) w.notebook, l->frame );
+
+	g_signal_connect ( w.notebook, "switch-page", G_CALLBACK ( notebook_switch_page_cb ), NULL );
+
+	lm = l;
+
+	gtk_widget_show_all ( l->frame );
+	gtk_widget_show_all ( box_label );
+	gtk_widget_show_all ( w.notebook );
+
+	l->next = calloc ( 1, sizeof ( struct list_files ) );
+
+	struct level level;
+	FILE *fp = fopen ( l->filename, "r" );
+	fread ( &level, 1, sizeof ( level ), fp );
+
+	l->size_width = level.tile_width;
+	l->size_height = level.tile_height;
+
+	/* часть чтения картинки */
+	read_pic ( level.filename, 1 );
+
+	int map[level.height][level.width];
+
+	for ( int i = 0; i < SCENE_LAYER; i++ ) {
+		fread ( map, 1, sizeof ( map ), fp );
+
+		struct scene *sc = &l->scene[i];
+
+		for ( int y = 0; y < level.height; y++ ) {
+			for ( int x = 0; x < level.width; x++ ) {
+				if ( map[y][x] >= 0 ) {
+					sc->x = lm->size_width * x;
+					sc->y = lm->size_height * y;
+					sc->pic = map[y][x];
+					sc->available = 1;
+					sc->next = calloc ( 1, sizeof ( struct scene ) );
+					sc = sc->next;
+				}
+			}
+		}
+
+	}
+	fclose ( fp );
+}
+
+static void read_pic ( char *pic_path, int state_file ) {
 	int width, height;
 	png_byte color_type;
 	png_byte bit_depth;
 	png_bytep *row = NULL;
 
-	FILE *fp = fopen ( lm->pic_path, "r" );
+	FILE *fp = fopen ( pic_path, "r" );
 	png_structp png = png_create_read_struct ( PNG_LIBPNG_VER_STRING, NULL, NULL, NULL );
 	if ( !png ) {
 		fclose ( fp );
@@ -530,6 +765,17 @@ static void button_add_ap_cb ( GtkButton *button, gpointer data ) {
 
 	int ww = atoi ( gtk_entry_get_text ( ( GtkEntry * ) w.entry_width_ap ) );
 	int hw = atoi ( gtk_entry_get_text ( ( GtkEntry * ) w.entry_height_ap ) );
+	if ( state_file ) {
+		ww = lm->size_width;
+		hw = lm->size_height;
+		lm->grid = 1;
+	} else {
+		ww = atoi ( gtk_entry_get_text ( ( GtkEntry * ) w.entry_width_ap ) );
+		hw = atoi ( gtk_entry_get_text ( ( GtkEntry * ) w.entry_height_ap ) );
+		lm->size_width = ww;
+		lm->size_height = hw;
+		lm->grid = 1;
+	}
 
 	int fill_width = width / ww;
 	int fill_height = height / hw;
@@ -604,6 +850,10 @@ static void button_add_ap_cb ( GtkButton *button, gpointer data ) {
 	}
 
 	gtk_widget_queue_draw ( lm->draw_pics );
+}
+
+static void button_add_ap_cb ( GtkButton *button, gpointer data ) {
+	read_pic ( lm->pic_path, 0 );
 }
 
 static void button_ap_cb ( GtkButton *button, gpointer data ) {
@@ -706,6 +956,7 @@ static void static_create_app_menu ( ) {
 		{ "new_project", activate_new_project },
 		{ "save_project", activate_save_project },
 		{ "save_as_project", activate_save_as_project },
+		{ "open_project", activate_open_project },
 		{ "add_picture", activate_add_picture },
 		{ "quit", activate_quit }
 	};
@@ -715,6 +966,7 @@ static void static_create_app_menu ( ) {
 	GMenu *menu_root = g_menu_new ( );
 	GMenu *menu_project = g_menu_new ( );
 	g_menu_append ( menu_project, "Новый проект", "app.new_project" );
+	g_menu_append ( menu_project, "Открыть проект", "app.open_project" );
 	g_menu_append ( menu_project, "Сохранить проект", "app.save_project" );
 	g_menu_append ( menu_project, "Сохранить проект как ...", "app.save_as_project" );
 	g_menu_append_submenu ( menu_root, "Проект", ( GMenuModel * ) menu_project );
