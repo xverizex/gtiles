@@ -40,6 +40,13 @@ struct info_tile {
 	double height;
 };
 
+struct eraser {
+	double x;
+	double y;
+	double width;
+	double height;
+};
+
 struct scene {
 	int available;
 	double x;
@@ -66,6 +73,7 @@ struct list_files {
 	char *filename;
 	char *name;
 	int state_cursor;
+	struct eraser eraser;
 	GtkWidget *drawing;
 	GtkWidget *frame;
 	GtkWidget *label;
@@ -281,14 +289,23 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 		struct scene *sc = &lm->scene[layer];
 		double x = lm->info[lm->current_pic].x;
 		double y = lm->info[lm->current_pic].y;
+		double erx = lm->eraser.x;
+		double ery = lm->eraser.y;
 		int found = 0;
 		while ( sc->next ) {
 			if ( sc->available ) {
-				if ( sc->x == x && sc->y == y ) {
-					if ( lm->state_cursor == STATE_CURSOR_BUTTON ) sc->pic = lm->current_pic;
-					else if ( lm->state_cursor == STATE_CLEAR_BUTTON ) sc->available = 0;
-					found = 1;
-					break;
+				if ( lm->state_cursor == STATE_CURSOR_BUTTON ) {
+					if ( sc->x == x && sc->y == y ) {
+						sc->pic = lm->current_pic;
+						found = 1;
+						break;
+					}
+				} else if ( lm->state_cursor == STATE_CLEAR_BUTTON ) {
+					if ( sc->x == erx && sc->y == ery ) {
+						sc->available = 0;
+						found = 1;
+						break;
+					}
 				}
 			}
 
@@ -296,23 +313,25 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 			sc = sc->next;
 		}
 		if ( !found ) {
-			if ( !sc->available ) {
-				sc->available = 1;
-				sc->x = x;
-				sc->y = y;
-				sc->pic = lm->current_pic;
-			} else {
-				sc->next = calloc ( 1, sizeof ( struct scene ) );
-				sc = sc->next;
-				sc->available = 1;
-				sc->x = x;
-				sc->y = y;
-				sc->pic = lm->current_pic;
+			if ( lm->state_cursor == STATE_CURSOR_BUTTON ) {
+				if ( !sc->available ) {
+					sc->available = 1;
+					sc->x = x;
+					sc->y = y;
+					sc->pic = lm->current_pic;
+				} else {
+					sc->next = calloc ( 1, sizeof ( struct scene ) );
+					sc = sc->next;
+					sc->available = 1;
+					sc->x = x;
+					sc->y = y;
+					sc->pic = lm->current_pic;
+				}
 			}
 		}
 	}
 
-	if ( lm->current_pic >= 0 ) {
+	if ( ( lm->current_pic >= 0 ) || ( lm->state_cursor == STATE_CLEAR_BUTTON ) ) {
 		double width, height;
 		width = gtk_widget_get_allocated_width ( widget );
 		height = gtk_widget_get_allocated_height ( widget );
@@ -323,6 +342,8 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 					if ( evm->y >= y && evm->y <= y + l->size_height ) {
 						lm->info[l->current_pic].x = x;
 						lm->info[l->current_pic].y = y;
+						lm->eraser.x = x;
+						lm->eraser.y = y;
 						found = 1;
 						break;
 					}	
@@ -349,39 +370,51 @@ static gboolean draw_button_press_event_cb ( GtkWidget *widget, GdkEvent *event,
 		return FALSE;
 	}
 
-	if ( evb->type == GDK_BUTTON_PRESS && evb->button == 1 && lm->current_pic >= 0 ) {
+	if ( evb->type == GDK_BUTTON_PRESS && evb->button == 1 && ( ( lm->current_pic >= 0 ) || ( lm->state_cursor == STATE_CLEAR_BUTTON ) ) ) {
 		paint_bool = 1;
 		int layer = gtk_spin_button_get_value ( ( GtkSpinButton * ) lm->spin_layer );
 		struct scene *sc = &lm->scene[layer];
 		double x = lm->info[lm->current_pic].x;
 		double y = lm->info[lm->current_pic].y;
+		double erx = lm->eraser.x;
+		double ery = lm->eraser.y;
 		int found = 0;
 		while ( sc->next ) {
 			if ( sc->available ) {
-				if ( sc->x == x && sc->y == y ) {
-					if ( lm->state_cursor == STATE_CURSOR_BUTTON ) sc->pic = lm->current_pic;
-					else if ( lm->state_cursor == STATE_CLEAR_BUTTON ) sc->available = 0;
-					found = 1;
-					break;
+				if ( lm->state_cursor == STATE_CURSOR_BUTTON ) {
+					if ( sc->x == x && sc->y == y ) {
+						sc->pic = lm->current_pic;
+						found = 1;
+						break;
+					}
+				} else if ( lm->state_cursor == STATE_CLEAR_BUTTON ) {
+					if ( sc->x == erx && sc->y == ery ) {
+						sc->available = 0;
+						found = 1;
+						break;
+					}
 				}
 			}
+			if ( found ) break;
 
 			if ( !sc->next ) break;
 			sc = sc->next;
 		}
 		if ( !found ) {
-			if ( !sc->available ) {
-				sc->available = 1;
-				sc->x = x;
-				sc->y = y;
-				sc->pic = lm->current_pic;
-			} else {
-				sc->next = calloc ( 1, sizeof ( struct scene ) );
-				sc = sc->next;
-				sc->available = 1;
-				sc->x = x;
-				sc->y = y;
-				sc->pic = lm->current_pic;
+			if ( lm->state_cursor == STATE_CURSOR_BUTTON ) {
+				if ( !sc->available ) {
+					sc->available = 1;
+					sc->x = x;
+					sc->y = y;
+					sc->pic = lm->current_pic;
+				} else {
+					sc->next = calloc ( 1, sizeof ( struct scene ) );
+					sc = sc->next;
+					sc->available = 1;
+					sc->x = x;
+					sc->y = y;
+					sc->pic = lm->current_pic;
+				}
 			}
 		}
 	}
@@ -758,6 +791,7 @@ static void activate_open_project ( GSimpleAction *simple, GVariant *parameter, 
 
 	/* часть чтения картинки */
 	read_pic ( level.filename, 1 );
+	l->pic_path = strdup ( level.filename );
 
 	int map[level.height][level.width];
 
