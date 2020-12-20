@@ -287,6 +287,39 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 
 	}
 
+	if ( paint_bool ) {
+		int layer = gtk_spin_button_get_value ( ( GtkSpinButton * ) lm->spin_layer );
+		struct scene *sc = &lm->scene[layer];
+		double x = lm->info[lm->current_pic].x;
+		double y = lm->info[lm->current_pic].y;
+		int found = 0;
+		while ( sc->available ) {
+			if ( sc->x == x && sc->y == y ) {
+				sc->pic = lm->current_pic;
+				found = 1;
+				break;
+			}
+
+			if ( !sc->next ) break;
+			sc = sc->next;
+		}
+		if ( !found ) {
+			if ( !sc->available ) {
+				sc->available = 1;
+				sc->x = x;
+				sc->y = y;
+				sc->pic = lm->current_pic;
+			} else {
+				sc->next = calloc ( 1, sizeof ( struct scene ) );
+				sc = sc->next;
+				sc->available = 1;
+				sc->x = x;
+				sc->y = y;
+				sc->pic = lm->current_pic;
+			}
+		}
+	}
+
 	gtk_widget_queue_draw ( l->drawing );
 
 	return FALSE;
