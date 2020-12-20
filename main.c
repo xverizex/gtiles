@@ -3,6 +3,7 @@
 #include <png.h>
 #include <stdlib.h>
 #include <cairo/cairo.h>
+#include <math.h>
 
 GtkApplication *app;
 
@@ -37,6 +38,16 @@ struct info_tile {
 	int height;
 };
 
+struct scene {
+	int available;
+	double x;
+	double y;
+	int pic;
+	struct scene *next;
+};
+
+#define SCENE_LAYER           10
+
 struct list_files {
 	int id;
 	char *filename;
@@ -67,9 +78,11 @@ struct list_files {
 	struct image **im;
 	cairo_surface_t **sur;
 	struct info_tile *info;
+	struct scene scene[SCENE_LAYER];
 	int current_pic;
 	struct list_files *next;
 } *lf;
+
 
 struct list_files *lm;
 
@@ -165,13 +178,25 @@ static gboolean draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer data ) {
 		cairo_paint ( cr );
 	}
 
+	for ( int i = 0; i < SCENE_LAYER; i++ ) {
+		struct scene *sc = &lm->scene[i];
+		while ( sc->available ) {
+			cairo_set_source_surface ( cr, l->sur[sc->pic], sc->x, sc->y );
+			cairo_paint ( cr );
+
+			if ( !sc->next ) break;
+			sc = sc->next;
+		}
+	}
+
 	return FALSE;
 }
 
 static int btn_m;
-static int px;
-static int py;
+static double px;
+static double py;
 static int btn_sel;
+static int paint_bool;
 
 static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event, gpointer data ) {
 	GdkEventMotion *evm = ( GdkEventMotion * ) event;
@@ -187,15 +212,39 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 			if ( l->pos_x < -l->size_width ) l->pos_x += l->size_width;
 			else l->pos_x -= x - px;
 		}
-		px = x;
 		if ( l->pos_y > 0 ) {
 			l->pos_y -= y - py + l->size_height;
 		} else {
 			if ( l->pos_y < -l->size_height ) l->pos_y += l->size_height;
 			else l->pos_y -= y - py;
 		}
-		py = y;
 
+
+		for ( int i = 0; i < SCENE_LAYER; i++ ) {
+			struct scene *sc = &lm->scene[i];
+
+			while ( sc->available ) {
+				double rx = evm->x - px;
+				double ry = evm->y - py;
+				printf ( "%f %f %f %f\n", evm->x, px, rx, fabs ( rx ) );
+				double rrx = fabs ( rx );
+				double rry = fabs ( ry );
+
+#if 0
+				if ( rx > 0.0 ) sc->x -= rrx + l->pos_x;
+				else if ( rx < 0.0 ) sc->x += rrx - l->pos_x;
+
+				if ( ry > 0.0 ) sc->y -= rry;
+				else if ( ry < 0.0 ) sc->y += rry;
+#endif
+
+				if ( !sc->next ) break;
+
+				sc = sc->next;
+			}
+		}
+		px = x;
+		py = y;
 
 		gtk_widget_queue_draw ( l->drawing );
 	}
@@ -221,10 +270,12 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 
 		gtk_widget_queue_draw ( l->drawing );
 	}
+
 	
 
 	return FALSE;
 }
+
 static gboolean draw_button_press_event_cb ( GtkWidget *widget, GdkEvent *event, gpointer data ) {
 	GdkEventButton *evb = ( GdkEventButton * ) event;
 
@@ -232,7 +283,44 @@ static gboolean draw_button_press_event_cb ( GtkWidget *widget, GdkEvent *event,
 		btn_m = 1;
 		px = evb->x;
 		py = evb->y;
+
+		return FALSE;
 	}
+
+	if ( evb->type == GDK_BUTTON_PRESS && evb->button == 1 && lm->current_pic >= 0 ) {
+		paint_bool = 1;
+		int layer = gtk_spin_button_get_value ( ( GtkSpinButton * ) lm->spin_layer );
+		struct scene *sc = &lm->scene[layer];
+		int x = lm->info[lm->current_pic].x;
+		int y = lm->info[lm->current_pic].y;
+		int found = 0;
+		while ( sc->available ) {
+			if ( sc->x == x && sc->y == y ) {
+				sc->pic = lm->current_pic;
+				found = 1;
+				break;
+			}
+
+			if ( !sc->next ) break;
+			sc = sc->next;
+		}
+		if ( !found ) {
+			if ( !sc->available ) {
+				sc->available = 1;
+				sc->x = x;
+				sc->y = y;
+				sc->pic = lm->current_pic;
+			} else {
+				sc->next = calloc ( 1, sizeof ( struct scene ) );
+				sc = sc->next;
+				sc->available = 1;
+				sc->x = x;
+				sc->y = y;
+				sc->pic = lm->current_pic;
+			}
+		}
+	}
+
 	return FALSE;
 }
 static gboolean draw_button_release_event_cb ( GtkWidget *widget, GdkEvent *event, gpointer data ) {
@@ -240,6 +328,7 @@ static gboolean draw_button_release_event_cb ( GtkWidget *widget, GdkEvent *even
 
 	if ( evb->type == GDK_BUTTON_RELEASE ) {
 		btn_m = 0;
+		paint_bool = 0;
 	}
 
 	return FALSE;
