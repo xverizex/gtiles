@@ -192,9 +192,11 @@ static gboolean draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer data ) {
 
 	for ( int i = 0; i < SCENE_LAYER; i++ ) {
 		struct scene *sc = &lm->scene[i];
-		while ( sc->available ) {
-			cairo_set_source_surface ( cr, l->sur[sc->pic], sc->x, sc->y );
-			cairo_paint ( cr );
+		while ( sc->next ) {
+			if ( sc->available ) {
+				cairo_set_source_surface ( cr, l->sur[sc->pic], sc->x, sc->y );
+				cairo_paint ( cr );
+			}
 
 			if ( !sc->next ) break;
 			sc = sc->next;
@@ -243,16 +245,18 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 		for ( int i = 0; i < SCENE_LAYER; i++ ) {
 			struct scene *sc = &lm->scene[i];
 
-			while ( sc->available ) {
+			while ( sc->next ) {
 
-				double xx = x - px;
-				double yy = y - py;
+				if ( sc->available ) {
+					double xx = x - px;
+					double yy = y - py;
 
-				if ( xx < 0.0 ) sc->x += fabs ( xx );
-				else if ( xx > 0.0 ) sc->x -= fabs ( xx ) - temp_x;
+					if ( xx < 0.0 ) sc->x += fabs ( xx );
+					else if ( xx > 0.0 ) sc->x -= fabs ( xx ) - temp_x;
 
-				if ( yy < 0.0 ) sc->y += fabs ( yy );
-				else if ( yy > 0.0 ) sc->y -= fabs ( yy ) - temp_y;
+					if ( yy < 0.0 ) sc->y += fabs ( yy );
+					else if ( yy > 0.0 ) sc->y -= fabs ( yy ) - temp_y;
+				}
 
 				if ( !sc->next ) break;
 
@@ -293,11 +297,13 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 		double x = lm->info[lm->current_pic].x;
 		double y = lm->info[lm->current_pic].y;
 		int found = 0;
-		while ( sc->available ) {
-			if ( sc->x == x && sc->y == y ) {
-				sc->pic = lm->current_pic;
-				found = 1;
-				break;
+		while ( sc->next ) {
+			if ( sc->available ) {
+				if ( sc->x == x && sc->y == y ) {
+					sc->pic = lm->current_pic;
+					found = 1;
+					break;
+				}
 			}
 
 			if ( !sc->next ) break;
@@ -343,11 +349,13 @@ static gboolean draw_button_press_event_cb ( GtkWidget *widget, GdkEvent *event,
 		double x = lm->info[lm->current_pic].x;
 		double y = lm->info[lm->current_pic].y;
 		int found = 0;
-		while ( sc->available ) {
-			if ( sc->x == x && sc->y == y ) {
-				sc->pic = lm->current_pic;
-				found = 1;
-				break;
+		while ( sc->next ) {
+			if ( sc->available ) {
+				if ( sc->x == x && sc->y == y ) {
+					sc->pic = lm->current_pic;
+					found = 1;
+					break;
+				}
 			}
 
 			if ( !sc->next ) break;
@@ -538,14 +546,16 @@ static void write_to_file ( struct scene *sc, int sx, int sy, int width, int hei
 		}
 	}
 
-	while ( sc->available ) {
+	while ( sc->next ) {
 		//printf ( "%f %d %d\n", sc->x, sx, eex );
-		int x = sc->x - ( sx < 0 ? sx - 1 : sx );
-		int y = sc->y - ( sy < 0 ? sy - 1 : sy );
-		x /= lm->size_width;
-		y /= lm->size_height;
+		if ( sc->available ) {
+			int x = sc->x - ( sx < 0 ? sx - 1 : sx );
+			int y = sc->y - ( sy < 0 ? sy - 1 : sy );
+			x /= lm->size_width;
+			y /= lm->size_height;
 
-		map[y][x] = sc->pic;
+			map[y][x] = sc->pic;
+		}
 
 		if ( !sc->next ) break;
 
@@ -563,19 +573,21 @@ static void activate_save_project ( GSimpleAction *simple, GVariant *parameter, 
 	int temp_x, temp_y;
 	for ( int i = 0; i < SCENE_LAYER; i++ ) {
 		struct scene *sc = &lm->scene[i];
-		while ( sc->available ) {
+		while ( sc->next ) {
 
-			temp_x = sc->x;
-			temp_y = sc->y;
-			if ( !ff ) {
-				sx = ex = temp_x;
-				sy = ey = temp_y;
-				ff = 1;
-			} else {
-				if ( temp_x < sx ) sx = temp_x;
-				if ( temp_y < sy ) sy = temp_y;
-				if ( temp_x > ex ) ex = temp_x;
-				if ( temp_y > ey ) ey = temp_y;
+			if ( sc->available ) {
+				temp_x = sc->x;
+				temp_y = sc->y;
+				if ( !ff ) {
+					sx = ex = temp_x;
+					sy = ey = temp_y;
+					ff = 1;
+				} else {
+					if ( temp_x < sx ) sx = temp_x;
+					if ( temp_y < sy ) sy = temp_y;
+					if ( temp_x > ex ) ex = temp_x;
+					if ( temp_y > ey ) ey = temp_y;
+				}
 			}
 
 			if ( !sc->next ) break;
