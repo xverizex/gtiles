@@ -18,6 +18,8 @@ struct widgets {
 	GtkWidget *entry_width_ap;
 	GtkWidget *entry_height_ap;
 	GtkWidget *button_add_ap;
+	GtkWidget *clear_button;
+	GtkWidget *cursor_button;
 
 	GtkWidget *STUBS;
 } w;
@@ -56,11 +58,14 @@ struct level {
 	char filename[255];
 };
 
+#define STATE_CURSOR_BUTTON     0
+#define STATE_CLEAR_BUTTON      1
 
 struct list_files {
 	int id;
 	char *filename;
 	char *name;
+	int state_cursor;
 	GtkWidget *drawing;
 	GtkWidget *frame;
 	GtkWidget *label;
@@ -270,26 +275,6 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 
 	}
 
-	if ( lm->current_pic >= 0 ) {
-		double width, height;
-		width = gtk_widget_get_allocated_width ( widget );
-		height = gtk_widget_get_allocated_height ( widget );
-		int found = 0;
-		for ( double y = l->pos_y; y < height; y += l->size_height ) {
-			for ( double x = l->pos_x; x < width; x += l->size_width ) {
-				if ( evm->x >= x && evm->x <= x + l->size_width ) {
-					if ( evm->y >= y && evm->y <= y + l->size_height ) {
-						lm->info[l->current_pic].x = x;
-						lm->info[l->current_pic].y = y;
-						found = 1;
-						break;
-					}	
-				}
-			}
-			if ( found ) break;
-		}
-
-	}
 
 	if ( paint_bool ) {
 		int layer = gtk_spin_button_get_value ( ( GtkSpinButton * ) lm->spin_layer );
@@ -300,7 +285,8 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 		while ( sc->next ) {
 			if ( sc->available ) {
 				if ( sc->x == x && sc->y == y ) {
-					sc->pic = lm->current_pic;
+					if ( lm->state_cursor == STATE_CURSOR_BUTTON ) sc->pic = lm->current_pic;
+					else if ( lm->state_cursor == STATE_CLEAR_BUTTON ) sc->available = 0;
 					found = 1;
 					break;
 				}
@@ -324,6 +310,27 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 				sc->pic = lm->current_pic;
 			}
 		}
+	}
+
+	if ( lm->current_pic >= 0 ) {
+		double width, height;
+		width = gtk_widget_get_allocated_width ( widget );
+		height = gtk_widget_get_allocated_height ( widget );
+		int found = 0;
+		for ( double y = l->pos_y; y < height; y += l->size_height ) {
+			for ( double x = l->pos_x; x < width; x += l->size_width ) {
+				if ( evm->x >= x && evm->x <= x + l->size_width ) {
+					if ( evm->y >= y && evm->y <= y + l->size_height ) {
+						lm->info[l->current_pic].x = x;
+						lm->info[l->current_pic].y = y;
+						found = 1;
+						break;
+					}	
+				}
+			}
+			if ( found ) break;
+		}
+
 	}
 
 	gtk_widget_queue_draw ( l->drawing );
@@ -352,7 +359,8 @@ static gboolean draw_button_press_event_cb ( GtkWidget *widget, GdkEvent *event,
 		while ( sc->next ) {
 			if ( sc->available ) {
 				if ( sc->x == x && sc->y == y ) {
-					sc->pic = lm->current_pic;
+					if ( lm->state_cursor == STATE_CURSOR_BUTTON ) sc->pic = lm->current_pic;
+					else if ( lm->state_cursor == STATE_CLEAR_BUTTON ) sc->available = 0;
 					found = 1;
 					break;
 				}
@@ -448,6 +456,10 @@ static void activate_new_project ( GSimpleAction *simple, GVariant *parameter, g
 	FILE *fp = fopen ( l->filename, "w" );
 	fwrite ( &level, 1, sizeof ( struct level ), fp );
 	fclose ( fp );
+
+	l->state_cursor = STATE_CURSOR_BUTTON;
+	gtk_toggle_button_set_active ( ( GtkToggleButton * ) w.cursor_button, TRUE );
+	gtk_toggle_button_set_active ( ( GtkToggleButton * ) w.clear_button, FALSE );
 
 	l->name = strrchr ( l->filename, '/' );
 	l->name++;
@@ -646,6 +658,11 @@ static void activate_open_project ( GSimpleAction *simple, GVariant *parameter, 
 
 	l->name = strrchr ( l->filename, '/' );
 	l->name++;
+
+	l->state_cursor = STATE_CURSOR_BUTTON;
+
+	gtk_toggle_button_set_active ( ( GtkToggleButton * ) w.cursor_button, TRUE );
+	gtk_toggle_button_set_active ( ( GtkToggleButton * ) w.clear_button, FALSE );
 
 	l->frame = g_object_new ( GTK_TYPE_FRAME, "shadow-type", GTK_SHADOW_NONE, NULL );
 	GtkWidget *box = gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
@@ -1021,6 +1038,19 @@ static void static_create_app_menu ( ) {
 	gtk_application_set_app_menu ( ( GtkApplication * ) app, ( GMenuModel * ) menu_root );
 }
 
+static void clear_button_toggled_cb ( GtkToggleButton *button, gpointer data ) {
+	if ( lm ) {
+		lm->state_cursor = STATE_CLEAR_BUTTON;
+		gtk_toggle_button_set_active ( ( GtkToggleButton * ) w.cursor_button, FALSE );
+	}
+}
+static void cursor_button_toggled_cb ( GtkToggleButton *button, gpointer data ) {
+	if ( lm ) {
+		lm->state_cursor = STATE_CURSOR_BUTTON;
+		gtk_toggle_button_set_active ( ( GtkToggleButton * ) w.clear_button, FALSE );
+	}
+}
+
 static void app_activate_cb ( GtkApplication *app, gpointer data ) {
 	static_init_list_files ( );
 
@@ -1038,6 +1068,15 @@ static void app_activate_cb ( GtkApplication *app, gpointer data ) {
 	gtk_header_bar_set_show_close_button ( ( GtkHeaderBar * ) w.header, TRUE );
 	gtk_header_bar_set_decoration_layout ( ( GtkHeaderBar * ) w.header, ":menu,minimize,maximize,close" );
 	gtk_window_set_titlebar ( ( GtkWindow * ) w.window, w.header );
+
+	w.clear_button = gtk_toggle_button_new_with_label ( "Ластик" );
+	w.cursor_button = gtk_toggle_button_new_with_label ( "Курсор" );
+
+	g_signal_connect ( w.clear_button, "toggled", G_CALLBACK ( clear_button_toggled_cb ), NULL );
+	g_signal_connect ( w.cursor_button, "toggled", G_CALLBACK ( cursor_button_toggled_cb ), NULL );
+
+	gtk_header_bar_pack_end ( ( GtkHeaderBar * ) w.header, w.cursor_button );
+	gtk_header_bar_pack_end ( ( GtkHeaderBar * ) w.header, w.clear_button );
 
 	static_create_app_menu ( );
 
