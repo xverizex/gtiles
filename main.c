@@ -177,7 +177,7 @@ static gboolean draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer data ) {
 
 	struct list_files *l = ( struct list_files * ) data;
 
-	cairo_set_source_rgb ( cr, 0xc7 / 255.0, 0xed / 255.0, 0xeb / 255.0 );
+	cairo_set_source_rgb ( cr, 0x32 / 255.0, 0x8b / 255.0, 0xa8 / 255.0 );
 	cairo_paint ( cr );
 
 	double width, height;
@@ -200,10 +200,6 @@ static gboolean draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer data ) {
 		cairo_stroke ( cr );
 	}
 
-	if ( l->current_pic >= 0 ) {
-		cairo_set_source_surface ( cr, l->sur[l->current_pic], l->info[l->current_pic].x, l->info[l->current_pic].y );
-		cairo_paint ( cr );
-	}
 
 	for ( int i = 0; i < SCENE_LAYER; i++ ) {
 		struct scene *sc = &lm->scene[i];
@@ -218,6 +214,11 @@ static gboolean draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer data ) {
 			if ( !sc->next ) break;
 			sc = sc->next;
 		}
+	}
+
+	if ( l->current_pic >= 0 ) {
+		cairo_set_source_surface ( cr, l->sur[l->current_pic], l->info[l->current_pic].x, l->info[l->current_pic].y );
+		cairo_paint ( cr );
 	}
 
 	return FALSE;
