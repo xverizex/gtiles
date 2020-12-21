@@ -298,8 +298,8 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 		struct scene *sc = &lm->scene[layer];
 		double x = lm->info[lm->current_pic].x;
 		double y = lm->info[lm->current_pic].y;
-		int erx = lm->eraser.x;
-		int ery = lm->eraser.y;
+		double erx = lm->eraser.x;
+		double ery = lm->eraser.y;
 		int found = 0;
 		while ( sc->next ) {
 			if ( sc->available ) {
@@ -345,18 +345,14 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 		width = gtk_widget_get_allocated_width ( widget );
 		height = gtk_widget_get_allocated_height ( widget );
 		int found = 0;
-		int xx = evm->x;
-		int yy = evm->y;
+		double xx = evm->x;
+		double yy = evm->y;
 		double ppx = l->pos_x;
 		double ppy = l->pos_y;
-		for ( int y = l->pos_y; y < height; y += l->size_height, ppy += l->size_height ) {
-			for ( int x = l->pos_x; x < width; x += l->size_width, ppx += l->size_width ) {
-				if ( xx >= x && xx <= x + l->size_width ) {
-					if ( yy >= y && yy <= y + l->size_height ) {
-#if 0
+		for ( double y = l->pos_y; y < height; y += l->size_height, ppy += l->size_height ) {
+			for ( double x = l->pos_x; x < width; x += l->size_width, ppx += l->size_width ) {
 				if ( evm->x >= x && evm->x <= x + l->size_width ) {
 					if ( evm->y >= y && evm->y <= y + l->size_height ) {
-#endif
 						if ( lm->state_cursor == STATE_CLEAR_BUTTON ) {
 							lm->info[l->current_pic].x = ppx;
 							lm->info[l->current_pic].y = ppy;
@@ -365,6 +361,8 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 						} else if ( lm->state_cursor == STATE_CURSOR_BUTTON ) {
 							lm->info[l->current_pic].x = x;
 							lm->info[l->current_pic].y = y;
+							lm->eraser.x = x;
+							lm->eraser.y = y;
 						}
 						found = 1;
 						break;
@@ -410,6 +408,7 @@ static gboolean draw_button_press_event_cb ( GtkWidget *widget, GdkEvent *event,
 						break;
 					}
 				} else if ( lm->state_cursor == STATE_CLEAR_BUTTON ) {
+					printf ( "sc->x: %f erx: %f sc->y: %f ery: %f\n", sc->x, erx, sc->y, ery );
 					if ( sc->x == erx && sc->y == ery ) {
 						sc->available = 0;
 						found = 1;
