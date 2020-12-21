@@ -20,6 +20,7 @@ struct widgets {
 	GtkWidget *button_add_ap;
 	GtkWidget *clear_button;
 	GtkWidget *cursor_button;
+	GtkWidget *show_all_layers;
 
 	GtkWidget *STUBS;
 } w;
@@ -206,8 +207,12 @@ static gboolean draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer data ) {
 		int layer = gtk_spin_button_get_value ( ( GtkSpinButton * ) lm->spin_layer );
 		while ( sc->next ) {
 			if ( sc->available ) {
-				if ( layer == i ) cairo_set_source_surface ( cr, l->sur[sc->pic], sc->x, sc->y );
-				else cairo_set_source_surface ( cr, l->tur[sc->pic], sc->x, sc->y );
+				if ( gtk_toggle_button_get_active ( ( GtkToggleButton * ) w.show_all_layers ) == TRUE ) {
+					cairo_set_source_surface ( cr, l->sur[sc->pic], sc->x, sc->y );
+				} else {
+					if ( layer == i ) cairo_set_source_surface ( cr, l->sur[sc->pic], sc->x, sc->y );
+					else cairo_set_source_surface ( cr, l->tur[sc->pic], sc->x, sc->y );
+				}
 				cairo_paint ( cr );
 			}
 
@@ -282,7 +287,6 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 			}
 		}
 
-
 		px = x;
 		py = y;
 
@@ -320,17 +324,17 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 		if ( !found ) {
 			if ( lm->state_cursor == STATE_CURSOR_BUTTON ) {
 				if ( !sc->available ) {
-					sc->available = 1;
 					sc->x = x;
 					sc->y = y;
 					sc->pic = lm->current_pic;
+					sc->available = 1;
 				} else {
 					sc->next = calloc ( 1, sizeof ( struct scene ) );
 					sc = sc->next;
-					sc->available = 1;
 					sc->x = x;
 					sc->y = y;
 					sc->pic = lm->current_pic;
+					sc->available = 1;
 				}
 			}
 		}
@@ -341,14 +345,25 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 		width = gtk_widget_get_allocated_width ( widget );
 		height = gtk_widget_get_allocated_height ( widget );
 		int found = 0;
-		for ( double y = l->pos_y; y < height; y += l->size_height ) {
-			for ( double x = l->pos_x; x < width; x += l->size_width ) {
+		int xx = evm->x;
+		int yy = evm->y;
+		for ( int y = l->pos_y; y < height; y += l->size_height ) {
+			for ( int x = l->pos_x; x < width; x += l->size_width ) {
+				if ( xx >= x && xx <= x + l->size_width ) {
+					if ( yy >= y && yy <= y + l->size_height ) {
+#if 0
 				if ( evm->x >= x && evm->x <= x + l->size_width ) {
 					if ( evm->y >= y && evm->y <= y + l->size_height ) {
-						lm->info[l->current_pic].x = x;
-						lm->info[l->current_pic].y = y;
-						lm->eraser.x = x;
-						lm->eraser.y = y;
+#endif
+						if ( lm->state_cursor == STATE_CLEAR_BUTTON ) {
+							lm->info[l->current_pic].x = -100;
+							lm->info[l->current_pic].y = -100;
+							lm->eraser.x = x;
+							lm->eraser.y = y;
+						} else if ( lm->state_cursor == STATE_CURSOR_BUTTON ) {
+							lm->info[l->current_pic].x = x;
+							lm->info[l->current_pic].y = y;
+						}
 						found = 1;
 						break;
 					}	
@@ -408,17 +423,17 @@ static gboolean draw_button_press_event_cb ( GtkWidget *widget, GdkEvent *event,
 		if ( !found ) {
 			if ( lm->state_cursor == STATE_CURSOR_BUTTON ) {
 				if ( !sc->available ) {
-					sc->available = 1;
 					sc->x = x;
 					sc->y = y;
 					sc->pic = lm->current_pic;
+					sc->available = 1;
 				} else {
 					sc->next = calloc ( 1, sizeof ( struct scene ) );
 					sc = sc->next;
-					sc->available = 1;
 					sc->x = x;
 					sc->y = y;
 					sc->pic = lm->current_pic;
+					sc->available = 1;
 				}
 			}
 		}
@@ -1115,11 +1130,21 @@ static void cursor_button_toggled_cb ( GtkToggleButton *button, gpointer data ) 
 		gtk_toggle_button_set_active ( ( GtkToggleButton * ) w.clear_button, FALSE );
 	}
 }
+static void show_all_layers_toggled_cb ( GtkToggleButton *button, gpointer data ) {
+	gtk_widget_queue_draw ( lm->drawing );
+}
+
+static gboolean window_delete_event_cb ( GtkWidget *widget, gpointer data ) {
+	g_application_release ( ( GApplication * ) app );
+
+	return FALSE;
+}
 
 static void app_activate_cb ( GtkApplication *app, gpointer data ) {
 	static_init_list_files ( );
 
 	w.window = gtk_application_window_new ( app );
+	g_signal_connect ( w.window, "delete-event", G_CALLBACK ( window_delete_event_cb ), NULL );
 	gtk_window_maximize ( ( GtkWindow * ) w.window );
 	w.box = gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
 	gtk_container_add ( ( GtkContainer * ) w.window, w.box );
@@ -1136,12 +1161,15 @@ static void app_activate_cb ( GtkApplication *app, gpointer data ) {
 
 	w.clear_button = gtk_toggle_button_new_with_label ( "Ластик" );
 	w.cursor_button = gtk_toggle_button_new_with_label ( "Курсор" );
+	w.show_all_layers = gtk_check_button_new_with_label ( "Видеть все слои" );
 
 	g_signal_connect ( w.clear_button, "toggled", G_CALLBACK ( clear_button_toggled_cb ), NULL );
 	g_signal_connect ( w.cursor_button, "toggled", G_CALLBACK ( cursor_button_toggled_cb ), NULL );
+	g_signal_connect ( w.show_all_layers, "toggled", G_CALLBACK ( show_all_layers_toggled_cb ), NULL );
 
 	gtk_header_bar_pack_end ( ( GtkHeaderBar * ) w.header, w.cursor_button );
 	gtk_header_bar_pack_end ( ( GtkHeaderBar * ) w.header, w.clear_button );
+	gtk_header_bar_pack_end ( ( GtkHeaderBar * ) w.header, w.show_all_layers );
 
 	static_create_app_menu ( );
 
