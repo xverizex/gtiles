@@ -99,7 +99,9 @@ struct list_files {
 	char *pic_path;
 	int size_pics;
 	struct image **im;
+	struct image **tm;
 	cairo_surface_t **sur;
+	cairo_surface_t **tur;
 	struct info_tile *info;
 	struct scene scene[SCENE_LAYER];
 	int current_pic;
@@ -175,7 +177,7 @@ static gboolean draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer data ) {
 
 	struct list_files *l = ( struct list_files * ) data;
 
-	cairo_set_source_rgb ( cr, 0.2, 0.2, 0.2 );
+	cairo_set_source_rgb ( cr, 0xc7 / 255.0, 0xed / 255.0, 0xeb / 255.0 );
 	cairo_paint ( cr );
 
 	double width, height;
@@ -205,9 +207,11 @@ static gboolean draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer data ) {
 
 	for ( int i = 0; i < SCENE_LAYER; i++ ) {
 		struct scene *sc = &lm->scene[i];
+		int layer = gtk_spin_button_get_value ( ( GtkSpinButton * ) lm->spin_layer );
 		while ( sc->next ) {
 			if ( sc->available ) {
-				cairo_set_source_surface ( cr, l->sur[sc->pic], sc->x, sc->y );
+				if ( layer == i ) cairo_set_source_surface ( cr, l->sur[sc->pic], sc->x, sc->y );
+				else cairo_set_source_surface ( cr, l->tur[sc->pic], sc->x, sc->y );
 				cairo_paint ( cr );
 			}
 
@@ -911,6 +915,13 @@ static void read_pic ( char *pic_path, int state_file ) {
 			lm->im[y][x].bytes = calloc ( ww * 4 * hw * stride, 1 );
 		}
 	}
+	lm->tm = calloc ( fill_width * fill_height, sizeof ( struct image * ) );
+	for ( int y = 0; y < fill_height; y++ ) {
+		lm->tm[y] = calloc ( width, sizeof ( struct image ) );
+		for ( int x = 0; x < fill_width; x++ ) {
+			lm->tm[y][x].bytes = calloc ( ww * 4 * hw * stride, 1 );
+		}
+	}
 
 	int i = 0;
 	int c = 0;
@@ -928,12 +939,19 @@ static void read_pic ( char *pic_path, int state_file ) {
 			lm->im[y / hw][x / ww].bytes[stride * y + pos + 1] = row[y][i + 1];
 			lm->im[y / hw][x / ww].bytes[stride * y + pos + 2] = row[y][i + 0];
 			lm->im[y / hw][x / ww].bytes[stride * y + pos + 3] = row[y][i + 3];
+			lm->tm[y / hw][x / ww].pos += 4;
+			unsigned char transparent = 0x01;
+			lm->tm[y / hw][x / ww].bytes[stride * y + pos + 0] = row[y][i + 2];
+			lm->tm[y / hw][x / ww].bytes[stride * y + pos + 1] = row[y][i + 1];
+			lm->tm[y / hw][x / ww].bytes[stride * y + pos + 2] = row[y][i + 0];
+			lm->tm[y / hw][x / ww].bytes[stride * y + pos + 3] = transparent;//row[y][i + 3];
 			yy = y / hw;
 			xx = x / ww;
 			if ( xx != oldxx ) {
 				oldyy = yy;
 				oldxx = xx;
 				lm->im[oldyy][oldxx].pos = 0;
+				lm->tm[oldyy][oldxx].pos = 0;
 			}
 		}
 		lm->im[oldyy][oldxx].pos = 0;
@@ -942,6 +960,7 @@ static void read_pic ( char *pic_path, int state_file ) {
 	}
 
 	lm->sur = calloc ( fill_width * fill_height, sizeof ( char * ) );
+	lm->tur = calloc ( fill_width * fill_height, sizeof ( char * ) );
 	lm->size_pics = fill_width * fill_height;
 	lm->info = calloc ( fill_width * fill_height, sizeof ( struct info_tile ) );
 
@@ -949,6 +968,7 @@ static void read_pic ( char *pic_path, int state_file ) {
 	for ( int y = 0; y < fill_height; y++ ) {
 		for ( int x = 0; x < fill_width; x++ ) {
 			lm->sur[i] = cairo_image_surface_create_for_data ( lm->im[y][x].bytes, CAIRO_FORMAT_ARGB32, ww, hw, stride );
+			lm->tur[i] = cairo_image_surface_create_for_data ( lm->tm[y][x].bytes, CAIRO_FORMAT_ARGB32, ww, hw, stride );
 			lm->info[i].width = ww;
 			lm->info[i].height = hw;
 			i++;
