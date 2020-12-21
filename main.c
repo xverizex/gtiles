@@ -613,6 +613,8 @@ static void write_to_file ( struct scene *sc, int sx, int sy, int width, int hei
 }
 static void activate_save_project ( GSimpleAction *simple, GVariant *parameter, gpointer data ) {
 	struct level level;
+	level.width = 0;
+	level.height = 0;
 	int sx, sy, ex, ey;
 	int ff = 0;
 	int temp_x, temp_y;
@@ -659,9 +661,17 @@ static void activate_save_project ( GSimpleAction *simple, GVariant *parameter, 
 	level.tile_height = lm->size_height;
 	strncpy ( level.filename, lm->pic_path, 255 );
 
+	int fill = 1;
+	if ( ex == 1 && ey == 1 ) {
+		level.width = 0;
+		level.height = 0;
+		fill = 0;
+	}
 	FILE *fp = fopen ( lm->filename, "w" );
 	fwrite ( &level, 1, sizeof ( struct level ), fp );
 	fclose ( fp );
+
+	if ( !fill ) return;
 
 	for ( int i = 0; i < SCENE_LAYER; i++ ) {
 		struct scene *sc = &lm->scene[i];
