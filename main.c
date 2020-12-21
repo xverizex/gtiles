@@ -317,6 +317,7 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 					}
 				}
 			}
+			if ( found ) break;
 
 			if ( !sc->next ) break;
 			sc = sc->next;
