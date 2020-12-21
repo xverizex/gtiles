@@ -298,8 +298,8 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 		struct scene *sc = &lm->scene[layer];
 		double x = lm->info[lm->current_pic].x;
 		double y = lm->info[lm->current_pic].y;
-		double erx = lm->eraser.x;
-		double ery = lm->eraser.y;
+		int erx = lm->eraser.x;
+		int ery = lm->eraser.y;
 		int found = 0;
 		while ( sc->next ) {
 			if ( sc->available ) {
@@ -347,8 +347,10 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 		int found = 0;
 		int xx = evm->x;
 		int yy = evm->y;
-		for ( int y = l->pos_y; y < height; y += l->size_height ) {
-			for ( int x = l->pos_x; x < width; x += l->size_width ) {
+		double ppx = l->pos_x;
+		double ppy = l->pos_y;
+		for ( int y = l->pos_y; y < height; y += l->size_height, ppy += l->size_height ) {
+			for ( int x = l->pos_x; x < width; x += l->size_width, ppx += l->size_width ) {
 				if ( xx >= x && xx <= x + l->size_width ) {
 					if ( yy >= y && yy <= y + l->size_height ) {
 #if 0
@@ -356,8 +358,8 @@ static gboolean draw_button_motion_event_cb ( GtkWidget *widget, GdkEvent *event
 					if ( evm->y >= y && evm->y <= y + l->size_height ) {
 #endif
 						if ( lm->state_cursor == STATE_CLEAR_BUTTON ) {
-							lm->info[l->current_pic].x = -100;
-							lm->info[l->current_pic].y = -100;
+							lm->info[l->current_pic].x = ppx;
+							lm->info[l->current_pic].y = ppy;
 							lm->eraser.x = x;
 							lm->eraser.y = y;
 						} else if ( lm->state_cursor == STATE_CURSOR_BUTTON ) {
